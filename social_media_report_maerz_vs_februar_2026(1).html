@@ -625,12 +625,15 @@ body { min-width:1496px; }
   }
 
   // ---- Meta-Format erkennen ----
-  // Meta-Export: Zeile 1 = Metrik-Name, Zeile 2 = "Datum,Primary", Zeile 3+ = taegliche Werte
+  // Meta-Export: Zeile 1 = Metrik-Name, Zeile 2 = Header, Zeile 3+ = taegliche Werte (YYYY-MM-DD)
   function isMetaFormat(text) {
     var lines = text.replace(/^\uFEFF/, '').split(/\r?\n/).filter(function (l) { return l.trim(); });
     if (lines.length < 3) return false;
+    // Prüfe ob Header-Zeile "Datum" (ggf. mit Zusatz) enthält
     var h = lines[1].toLowerCase();
-    return h.indexOf('datum') !== -1 && h.indexOf('primary') !== -1;
+    if (h.indexOf('datum') !== -1) return true;
+    // Fallback: Daten-Zeilen beginnen mit ISO-Datum YYYY-MM-DD
+    return /^\d{4}-\d{2}-\d{2}/.test(lines[2].trim());
   }
 
   // ---- Natives Meta-CSV parsen ----
@@ -651,14 +654,18 @@ body { min-width:1496px; }
     var isViews = /aufrufe|views|reel|video|impressionen|reichweite|reach/.test(combined);
     var dashMetric = isFollower ? 'Followerstand' : isViews ? 'Aufrufe' : 'Interaktionen';
 
+    // Trennzeichen erkennen (Komma oder Semikolon)
+    var sep = (dataLines[0] && dataLines[0].indexOf(';') !== -1) ? ';' : ',';
+
     // Taegliche Werte einlesen
     var values = [];
     var firstDate = null;
     for (var i = 0; i < dataLines.length; i++) {
-      var parts = dataLines[i].split(',');
+      var parts = dataLines[i].split(sep);
       if (parts.length < 2) continue;
-      var dateStr = parts[0].trim().replace(/T\d+$/, ''); // "2026-03-01T0" -> "2026-03-01"
-      var val = parseFloat(parts[1]) || 0;
+      // Datum: "2026-03-01T00:00:00" → nur YYYY-MM-DD Teil nehmen
+      var dateStr = parts[0].trim().replace(/T.*$/, '');
+      var val = parseFloat(parts[1].replace(',', '.')) || 0;
       values.push(val);
       if (!firstDate && dateStr.length >= 7) firstDate = dateStr.substring(0, 7);
     }
