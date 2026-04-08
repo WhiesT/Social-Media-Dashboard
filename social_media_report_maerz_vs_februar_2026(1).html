@@ -394,11 +394,11 @@ body { min-width:1496px; }
       <div class="upload-panel" id="uploadPanel">
         <div class="upload-icon">↑</div>
         <div class="upload-label">Dashboard aktualisieren</div>
-        <div class="upload-hint">CSV-Vorlage hochladen &middot; Datei hierher ziehen oder klicken</div>
-        <input type="file" id="csvInput" accept=".csv,text/csv" style="display:none">
+        <div class="upload-hint">Meta-CSV-Dateien direkt hochladen &middot; Mehrere Dateien gleichzeitig m&ouml;glich</div>
+        <input type="file" id="csvInput" accept=".csv,text/csv" multiple style="display:none">
         <div class="upload-actions">
           <button class="btn-template" id="btnDownloadTemplate">Vorlage herunterladen</button>
-          <button class="btn-upload" id="btnSelectFile">CSV hochladen</button>
+          <button class="btn-upload" id="btnSelectFile">Meta-Dateien hochladen</button>
         </div>
       </div>
       <div class="upload-feedback" id="uploadFeedback" style="display:none"></div>
@@ -595,13 +595,14 @@ body { min-width:1496px; }
 
 <script>
 (function () {
-  // ---- Vorlage-CSV ----
-  var TEMPLATE_CSV = [
-    '# Social Media Dashboard \u2013 Datenvorlage',
+  // ---- Vorlage-CSV (UTF-8 BOM fuer Excel-Kompatibilitaet) ----
+  var BOM = '﻿';
+  var TEMPLATE_CSV = BOM + [
+    '# Social Media Dashboard - Datenvorlage',
     '# Werte aus deinen Meta Insights eintragen',
     '# current_month / prev_month im Format YYYY-MM (z.B. 2026-03)',
     '#',
-    '# ---- Abschnitt 1: KPI-\u00dcbersicht ----',
+    '# Abschnitt 1: KPI-Uebersicht',
     'section,platform,metric,current_value,prev_value,current_month,prev_month',
     'KPI,Instagram,Followerstand,42371,41486,2026-03,2026-02',
     'KPI,Instagram,Interaktionen,7339,20133,2026-03,2026-02',
@@ -610,28 +611,28 @@ body { min-width:1496px; }
     'KPI,Facebook,Interaktionen,1779,5118,2026-03,2026-02',
     'KPI,Facebook,Aufrufe,203230,3985551,2026-03,2026-02',
     '#',
-    '# ---- Abschnitt 2: Top-Posts ----',
-    '# followers_gained und post_url sind optional (leer lassen)',
+    '# Abschnitt 2: Top-Posts (optional)',
+    '# followers_gained und post_url koennen leer gelassen werden',
     'section,platform,rank,title,type,date,views,interactions,followers_gained,post_url',
-    'POST,Instagram,1,"Wir machen\'s aus! \ud83c\udf0d Am 28. M\u00e4rz \u2026",Reel,2026-03-23,77447,1196,5,https://www.instagram.com/p/example/',
-    'POST,Instagram,2,"Sonne an, Alltag aus \ud83d\ude0e",Reel,2026-03-15,32813,911,236,',
-    'POST,Instagram,3,"Ein neues Highlight wartet \u2026",Carousel,2026-03-24,29420,601,34,',
-    'POST,Facebook,1,"Wir machen\'s aus! \ud83c\udf0d Am 28. M\u00e4rz \u2026",Reel,2026-03-23,77447,1197,5,',
-    'POST,Facebook,2,"Na endlich: Sonntag ist offiziell \u2026",Foto,2026-03-13,33069,153,,',
-    'POST,Facebook,3,"Sonne an, Alltag aus \ud83d\ude0e",Reel,2026-03-15,17557,238,,'
+    'POST,Instagram,1,Post-Titel hier eintragen,Reel,2026-03-23,77447,1196,5,',
+    'POST,Instagram,2,Post-Titel hier eintragen,Reel,2026-03-15,32813,911,236,',
+    'POST,Instagram,3,Post-Titel hier eintragen,Carousel,2026-03-24,29420,601,34,',
+    'POST,Facebook,1,Post-Titel hier eintragen,Reel,2026-03-23,77447,1197,5,',
+    'POST,Facebook,2,Post-Titel hier eintragen,Foto,2026-03-13,33069,153,,',
+    'POST,Facebook,3,Post-Titel hier eintragen,Reel,2026-03-15,17557,238,,'
   ].join('\n');
 
   // ---- Hilfsfunktionen ----
-  var MONATE = ['Januar','Februar','M\u00e4rz','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+  var MONATE = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
 
   function monthName(yyyyMM) {
-    var parts = yyyyMM.split('-');
-    return MONATE[parseInt(parts[1], 10) - 1] + ' ' + parts[0];
+    var p = yyyyMM.split('-');
+    return MONATE[parseInt(p[1], 10) - 1] + ' ' + p[0];
   }
 
   function monthUpper(yyyyMM) {
-    var parts = yyyyMM.split('-');
-    return MONATE[parseInt(parts[1], 10) - 1].toUpperCase();
+    var p = yyyyMM.split('-');
+    return MONATE[parseInt(p[1], 10) - 1].toUpperCase();
   }
 
   function fmtNum(n) {
@@ -644,42 +645,128 @@ body { min-width:1496px; }
   }
 
   function calcDelta(curr, prev, metric) {
-    curr = Number(curr);
-    prev = Number(prev);
+    curr = Number(curr); prev = Number(prev);
     if (metric === 'Followerstand') {
       var diff = curr - prev;
-      var arrow = diff >= 0 ? '\u25b2' : '\u25bc';
-      var sign = diff >= 0 ? '+' : '\u2212';
       return {
-        text: arrow + ' ' + sign + fmtNum(Math.abs(diff)),
+        text: (diff >= 0 ? '▲ +' : '▼ −') + fmtNum(Math.abs(diff)),
         bgColor: diff >= 0 ? '#DDF3E8' : '#FBE3E3',
         textColor: diff >= 0 ? '#0F7A52' : '#C83F53'
       };
     } else {
       var pct = prev === 0 ? 0 : ((curr - prev) / prev * 100);
-      var arrow = pct >= 0 ? '\u25b2' : '\u25bc';
-      var sign = pct >= 0 ? '+' : '\u2212';
       var abs = Math.abs(pct).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
       return {
-        text: arrow + ' ' + sign + abs + '\u00a0%',
+        text: (pct >= 0 ? '▲ +' : '▼ −') + abs + ' %',
         bgColor: pct >= 0 ? '#DDF3E8' : '#FBE3E3',
         textColor: pct >= 0 ? '#0F7A52' : '#C83F53'
       };
     }
   }
 
-  // ---- CSV-Parser (RFC 4180 + Kommentare) ----
+  // ---- Meta-Format erkennen ----
+  // Meta-Export: Zeile 1 = Metrik-Name, Zeile 2 = "Datum,Primary", Zeile 3+ = taegliche Werte
+  function isMetaFormat(text) {
+    var lines = text.replace(/^\uFEFF/, '').split(/\r?\n/).filter(function (l) { return l.trim(); });
+    if (lines.length < 3) return false;
+    var h = lines[1].toLowerCase();
+    return h.indexOf('datum') !== -1 && h.indexOf('primary') !== -1;
+  }
+
+  // ---- Natives Meta-CSV parsen ----
+  function parseMetaFile(text, filename) {
+    var lines = text.replace(/^\uFEFF/, '').split(/\r?\n/).filter(function (l) { return l.trim(); });
+    var metricTitle = lines[0].trim();
+    // lines[1] = "Datum,Primary" (Header - ueberspringen)
+    var dataLines = lines.slice(2);
+
+    // Platform aus Dateiname ermitteln
+    var fnl = filename.toLowerCase();
+    var platform = fnl.indexOf('instagram') !== -1 ? 'instagram' :
+                   fnl.indexOf('facebook') !== -1 ? 'facebook' : null;
+
+    // Metrik-Typ ermitteln (aus Dateiname + Zeile 1)
+    var combined = (metricTitle + ' ' + filename).toLowerCase();
+    var isFollower = /follower|abonnenten|gefällt|fans|subscriber|likes/.test(combined);
+    var isViews = /aufrufe|views|reel|video|impressionen|reichweite|reach/.test(combined);
+    var dashMetric = isFollower ? 'Followerstand' : isViews ? 'Aufrufe' : 'Interaktionen';
+
+    // Taegliche Werte einlesen
+    var values = [];
+    var firstDate = null;
+    for (var i = 0; i < dataLines.length; i++) {
+      var parts = dataLines[i].split(',');
+      if (parts.length < 2) continue;
+      var dateStr = parts[0].trim().replace(/T\d+$/, ''); // "2026-03-01T0" -> "2026-03-01"
+      var val = parseFloat(parts[1]) || 0;
+      values.push(val);
+      if (!firstDate && dateStr.length >= 7) firstDate = dateStr.substring(0, 7);
+    }
+
+    if (!firstDate || values.length === 0) return null;
+
+    // Aggregation: Follower = letzter Wert (Gesamtstand), sonst Summe aller Tageswerte
+    var total = isFollower
+      ? values[values.length - 1]
+      : values.reduce(function (a, b) { return a + b; }, 0);
+
+    return { platform: platform, month: firstDate, metric: dashMetric, total: Math.round(total) };
+  }
+
+  // ---- Mehrere Meta-Dateien zusammenfuehren ----
+  function combineMetaFiles(results) {
+    var groups = {};
+    for (var i = 0; i < results.length; i++) {
+      var r = results[i];
+      if (!r || !r.platform || !r.month) continue;
+      var key = r.platform + '/' + r.month;
+      if (!groups[key]) groups[key] = { platform: r.platform, month: r.month, metrics: {} };
+      groups[key].metrics[r.metric] = r.total;
+    }
+
+    // Monate sortieren: neuester = aktuell, vorheriger = Vergleich
+    var months = [];
+    for (var k in groups) {
+      var m = groups[k].month;
+      if (months.indexOf(m) === -1) months.push(m);
+    }
+    months.sort();
+    var currentMonth = months[months.length - 1];
+    var prevMonth = months.length >= 2 ? months[months.length - 2] : null;
+
+    var kpis = [];
+    var platforms = ['instagram', 'facebook'];
+    var metrics = ['Followerstand', 'Interaktionen', 'Aufrufe'];
+
+    for (var pi = 0; pi < platforms.length; pi++) {
+      var plat = platforms[pi];
+      var curr = groups[plat + '/' + currentMonth];
+      var prev = prevMonth ? groups[plat + '/' + prevMonth] : null;
+      for (var mi = 0; mi < metrics.length; mi++) {
+        var metric = metrics[mi];
+        if (curr && curr.metrics[metric] !== undefined) {
+          kpis.push({
+            platform: plat.charAt(0).toUpperCase() + plat.slice(1),
+            metric: metric,
+            current_value: String(curr.metrics[metric]),
+            prev_value: prev && prev.metrics[metric] !== undefined ? String(prev.metrics[metric]) : '0',
+            current_month: currentMonth,
+            prev_month: prevMonth || ''
+          });
+        }
+      }
+    }
+    return { kpis: kpis, posts: [] };
+  }
+
+  // ---- Vorlage-CSV parsen ----
   function parseCSVLine(line) {
-    var result = [];
-    var current = '';
-    var inQuotes = false;
+    var result = [], current = '', inQuotes = false;
     for (var i = 0; i < line.length; i++) {
       var ch = line[i];
       if (inQuotes) {
-        if (ch === '"') {
-          if (line[i + 1] === '"') { current += '"'; i++; }
-          else { inQuotes = false; }
-        } else { current += ch; }
+        if (ch === '"') { if (line[i+1] === '"') { current += '"'; i++; } else { inQuotes = false; } }
+        else { current += ch; }
       } else {
         if (ch === '"') { inQuotes = true; }
         else if (ch === ',') { result.push(current); current = ''; }
@@ -690,64 +777,44 @@ body { min-width:1496px; }
     return result;
   }
 
-  function parseCSV(text) {
-    var lines = text.split(/\r?\n/);
-    var kpis = [];
-    var posts = [];
-    var kpiHeaders = null;
-    var postHeaders = null;
-
+  function parseTemplateCSV(text) {
+    var lines = text.replace(/^\uFEFF/, '').split(/\r?\n/);
+    var kpis = [], posts = [], kpiHeaders = null, postHeaders = null;
     for (var i = 0; i < lines.length; i++) {
       var line = lines[i].trim();
       if (!line || line.charAt(0) === '#') continue;
       var cols = parseCSVLine(line);
-      var sec = (cols[0] || '').trim().toUpperCase();
-
-      // Header-Zeilen erkennen
+      var sec = cols[0].trim().toUpperCase();
       if (sec === 'SECTION') continue;
       if (cols[0].trim().toLowerCase() === 'section') {
         var c2 = (cols[2] || '').trim().toLowerCase();
-        if (c2 === 'metric') {
-          kpiHeaders = cols.map(function (c) { return c.trim().toLowerCase(); });
-        } else if (c2 === 'rank') {
-          postHeaders = cols.map(function (c) { return c.trim().toLowerCase(); });
-        }
+        if (c2 === 'metric') kpiHeaders = cols.map(function (c) { return c.trim().toLowerCase(); });
+        else if (c2 === 'rank') postHeaders = cols.map(function (c) { return c.trim().toLowerCase(); });
         continue;
       }
-
       if (sec === 'KPI' && kpiHeaders) {
-        var obj = {};
-        kpiHeaders.forEach(function (h, idx) { obj[h] = (cols[idx] || '').trim(); });
-        kpis.push(obj);
+        var obj = {}; kpiHeaders.forEach(function (h, idx) { obj[h] = (cols[idx] || '').trim(); }); kpis.push(obj);
       } else if (sec === 'POST' && postHeaders) {
-        var obj = {};
-        postHeaders.forEach(function (h, idx) { obj[h] = (cols[idx] || '').trim(); });
-        posts.push(obj);
+        var obj = {}; postHeaders.forEach(function (h, idx) { obj[h] = (cols[idx] || '').trim(); }); posts.push(obj);
       }
     }
     return { kpis: kpis, posts: posts };
   }
 
   // ---- DOM-Updates ----
-  function applyData(data, filename) {
-    var kpis = data.kpis;
-    var posts = data.posts;
-
+  function applyData(data, label) {
+    var kpis = data.kpis, posts = data.posts;
     if (kpis.length === 0 && posts.length === 0) {
-      showFeedback('Keine g\u00fcltigen Daten gefunden. Bitte Vorlage korrekt ausf\u00fcllen.', 'error');
-      return;
+      showFeedback('Keine gültigen Daten gefunden.', 'error'); return;
     }
-
     var currMonthStr = kpis.length > 0 ? kpis[0].current_month : null;
     var prevMonthStr = kpis.length > 0 ? kpis[0].prev_month : null;
 
-    // 1. Header-Datum
     if (currMonthStr && prevMonthStr) {
       var hc = document.querySelector('.header-center');
       if (hc) hc.textContent = monthName(currMonthStr) + ' vs. ' + monthName(prevMonthStr);
     }
 
-    // 2. Plattform-Panels
     var panels = document.querySelectorAll('.platform-panel');
     var platformOrder = ['instagram', 'facebook'];
     var metricOrder = ['Followerstand', 'Interaktionen', 'Aufrufe'];
@@ -755,114 +822,125 @@ body { min-width:1496px; }
     platformOrder.forEach(function (platformKey, panelIdx) {
       var panel = panels[panelIdx];
       if (!panel) return;
-
-      // KPI-Cards
       var platformKpis = kpis.filter(function (k) { return k.platform.toLowerCase() === platformKey; });
       var kpiCards = panel.querySelectorAll('.kpi-card');
 
       metricOrder.forEach(function (metric, kpiIdx) {
         var kpi = null;
-        for (var j = 0; j < platformKpis.length; j++) {
-          if (platformKpis[j].metric === metric) { kpi = platformKpis[j]; break; }
-        }
+        for (var j = 0; j < platformKpis.length; j++) { if (platformKpis[j].metric === metric) { kpi = platformKpis[j]; break; } }
         if (!kpi || !kpiCards[kpiIdx]) return;
         var card = kpiCards[kpiIdx];
         card.querySelector('.kpi-value').textContent = fmtNum(kpi.current_value);
-        card.querySelector('.kpi-prev').textContent = monthName(kpi.prev_month) + ': ' + fmtNum(kpi.prev_value);
+        if (kpi.prev_month && kpi.prev_value !== '0') {
+          card.querySelector('.kpi-prev').textContent = monthName(kpi.prev_month) + ': ' + fmtNum(kpi.prev_value);
+        }
         var delta = calcDelta(kpi.current_value, kpi.prev_value, metric);
         var pill = card.querySelector('.delta-pill');
-        pill.textContent = delta.text;
-        pill.style.background = delta.bgColor;
-        pill.style.color = delta.textColor;
+        pill.textContent = delta.text; pill.style.background = delta.bgColor; pill.style.color = delta.textColor;
       });
 
-      // 3. Posts-Titel
       if (currMonthStr) {
         var pt = panel.querySelector('.posts-title');
         if (pt) pt.textContent = 'TOP 3 POSTS IM ' + monthUpper(currMonthStr);
       }
 
-      // 4. Post-Cards
-      var platformPosts = posts.filter(function (p) { return p.platform.toLowerCase() === platformKey; });
-      platformPosts.sort(function (a, b) { return parseInt(a.rank, 10) - parseInt(b.rank, 10); });
-
-      var postCards = panel.querySelectorAll('.post-card');
-      platformPosts.forEach(function (post, postIdx) {
-        var card = postCards[postIdx];
-        if (!card) return;
-        card.querySelector('.post-rank').textContent = '#' + post.rank;
-        card.querySelector('.post-title').textContent = post.title;
-        card.querySelector('.post-meta').textContent = post.type + ' \u00b7 ' + formatDateDE(post.date);
-
-        var chipsEl = card.querySelector('.chips');
-        chipsEl.innerHTML = '';
-
-        var chipV = document.createElement('div');
-        chipV.className = 'chip';
-        chipV.textContent = 'Aufrufe: ' + fmtNum(post.views);
-        chipsEl.appendChild(chipV);
-
-        var chipI = document.createElement('div');
-        chipI.className = 'chip';
-        chipI.textContent = 'Interaktionen: ' + fmtNum(post.interactions);
-        chipsEl.appendChild(chipI);
-
-        if (post.followers_gained && post.followers_gained !== '') {
-          var fg = parseInt(post.followers_gained, 10);
-          var chipF = document.createElement('div');
-          chipF.className = 'chip chip-green';
-          chipF.textContent = (fg >= 0 ? '+' : '') + fmtNum(fg) + ' Follower';
-          chipsEl.appendChild(chipF);
-        }
-
-        var link = card.querySelector('.post-link');
-        if (post.post_url && post.post_url !== '') {
-          link.href = post.post_url;
-          link.target = '_blank';
-          link.rel = 'noopener noreferrer';
-        } else {
-          link.href = 'javascript:void(0)';
-          link.removeAttribute('target');
-        }
-      });
+      if (posts.length > 0) {
+        var platformPosts = posts.filter(function (p) { return p.platform.toLowerCase() === platformKey; });
+        platformPosts.sort(function (a, b) { return parseInt(a.rank, 10) - parseInt(b.rank, 10); });
+        var postCards = panel.querySelectorAll('.post-card');
+        platformPosts.forEach(function (post, postIdx) {
+          var card = postCards[postIdx]; if (!card) return;
+          card.querySelector('.post-rank').textContent = '#' + post.rank;
+          card.querySelector('.post-title').textContent = post.title;
+          card.querySelector('.post-meta').textContent = post.type + ' · ' + formatDateDE(post.date);
+          var chipsEl = card.querySelector('.chips'); chipsEl.innerHTML = '';
+          var cv = document.createElement('div'); cv.className = 'chip';
+          cv.textContent = 'Aufrufe: ' + fmtNum(post.views); chipsEl.appendChild(cv);
+          var ci = document.createElement('div'); ci.className = 'chip';
+          ci.textContent = 'Interaktionen: ' + fmtNum(post.interactions); chipsEl.appendChild(ci);
+          if (post.followers_gained && post.followers_gained !== '') {
+            var fg = parseInt(post.followers_gained, 10);
+            var cf = document.createElement('div'); cf.className = 'chip chip-green';
+            cf.textContent = (fg >= 0 ? '+' : '') + fmtNum(fg) + ' Follower'; chipsEl.appendChild(cf);
+          }
+          var link = card.querySelector('.post-link');
+          if (post.post_url && post.post_url !== '') {
+            link.href = post.post_url; link.target = '_blank'; link.rel = 'noopener noreferrer';
+          } else { link.href = 'javascript:void(0)'; link.removeAttribute('target'); }
+        });
+      }
     });
 
-    showFeedback('Dashboard erfolgreich aktualisiert \u00b7 ' + (filename || 'Datei'), 'success');
+    showFeedback('Dashboard aktualisiert · ' + label, 'success');
   }
 
   function showFeedback(msg, type) {
     var el = document.getElementById('uploadFeedback');
-    el.textContent = msg;
-    el.className = 'upload-feedback ' + type;
-    el.style.display = 'block';
+    el.textContent = msg; el.className = 'upload-feedback ' + type; el.style.display = 'block';
   }
 
   // ---- Template Download ----
   function downloadTemplate() {
     var blob = new Blob([TEMPLATE_CSV], { type: 'text/csv;charset=utf-8;' });
     var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
-    a.href = url;
-    a.download = 'meta_dashboard_vorlage.csv';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    var a = document.createElement('a'); a.href = url; a.download = 'meta_dashboard_vorlage.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
   }
 
-  // ---- Datei verarbeiten ----
-  function handleFile(file) {
-    if (!file) return;
-    var reader = new FileReader();
-    reader.onload = function (e) {
-      try {
-        var data = parseCSV(e.target.result);
-        applyData(data, file.name);
-      } catch (err) {
-        showFeedback('Fehler beim Verarbeiten: ' + err.message, 'error');
+  // ---- Dateien verarbeiten ----
+  function handleFiles(fileList) {
+    var files = Array.prototype.slice.call(fileList);
+    if (files.length === 0) return;
+    var pending = files.length, metaResults = [], templateData = null, errors = [], metaCount = 0;
+
+    files.forEach(function (file) {
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        var text = e.target.result;
+        try {
+          if (isMetaFormat(text)) {
+            var r = parseMetaFile(text, file.name);
+            if (r) { metaResults.push(r); metaCount++; }
+            else { errors.push(file.name + ': konnte nicht erkannt werden'); }
+          } else {
+            templateData = parseTemplateCSV(text);
+          }
+        } catch (err) { errors.push(file.name + ': ' + err.message); }
+        pending--;
+        if (pending === 0) finalize();
+      };
+      reader.onerror = function () { errors.push(file.name + ': Lesefehler'); pending--; if (pending === 0) finalize(); };
+      reader.readAsText(file, 'UTF-8');
+    });
+
+    function finalize() {
+      var data = null, label = '';
+      if (metaCount > 0) {
+        data = combineMetaFiles(metaResults);
+        var summary = {};
+        metaResults.forEach(function (r) {
+          var k = r.platform + '/' + r.month;
+          if (!summary[k]) summary[k] = 0; summary[k]++;
+        });
+        var parts = [];
+        for (var k in summary) {
+          var sp = k.split('/');
+          var pName = sp[0].charAt(0).toUpperCase() + sp[0].slice(1);
+          parts.push(pName + ' ' + monthName(sp[1]) + ' (' + summary[k] + ' Metrik' + (summary[k] !== 1 ? 'en' : '') + ')');
+        }
+        label = metaCount + ' Datei' + (metaCount !== 1 ? 'en' : '') + ': ' + parts.join(', ');
+      } else if (templateData) {
+        data = templateData; label = 'Vorlage';
       }
-    };
-    reader.readAsText(file, 'UTF-8');
+      if (errors.length > 0 && !data) { showFeedback('Fehler: ' + errors.join(' | '), 'error'); return; }
+      if (data) {
+        applyData(data, label);
+        if (errors.length > 0) {
+          var fb = document.getElementById('uploadFeedback');
+          fb.textContent += ' (Warnung: ' + errors.join(', ') + ')';
+        }
+      }
+    }
   }
 
   // ---- Events ----
@@ -873,14 +951,13 @@ body { min-width:1496px; }
 
   btnTemplate.addEventListener('click', function (e) { e.stopPropagation(); downloadTemplate(); });
   btnSelect.addEventListener('click', function (e) { e.stopPropagation(); csvInput.click(); });
-  csvInput.addEventListener('change', function (e) { handleFile(e.target.files[0]); csvInput.value = ''; });
+  csvInput.addEventListener('change', function (e) { handleFiles(e.target.files); csvInput.value = ''; });
   panel.addEventListener('click', function () { csvInput.click(); });
   panel.addEventListener('dragover', function (e) { e.preventDefault(); panel.classList.add('dragover'); });
   panel.addEventListener('dragleave', function () { panel.classList.remove('dragover'); });
   panel.addEventListener('drop', function (e) {
-    e.preventDefault();
-    panel.classList.remove('dragover');
-    if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+    e.preventDefault(); panel.classList.remove('dragover');
+    if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
   });
 })();
 </script>
