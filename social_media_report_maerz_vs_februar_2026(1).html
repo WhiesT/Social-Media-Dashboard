@@ -656,7 +656,11 @@ body { min-width:1496px; }
       var sep = line.indexOf(';') !== -1 ? ';' : ',';
       var parts = line.split(sep);
       var valCol = parts.length >= 2 ? parts[1] : '';
-      if (parts.length >= 3 && !parts[1].replace(/[^0-9]/g, '')) valCol = parts[parts.length - 1];
+      if (parts.length >= 3) {
+        // Followerstand: letzte Spalte = kumulativer Gesamtstand (Meta: Datum | Neue | Gesamt)
+        // Andere: letzte Spalte nur wenn Spalte 2 keine Zahl enthält
+        if (isFollower || !parts[1].replace(/[^0-9]/g, '')) valCol = parts[parts.length - 1];
+      }
       var val = parseFloat(valCol.replace(/[^0-9.,\-]/g, '').replace(/\./g, '').replace(',', '.')) || 0;
       values.push(val);
       if (!firstDate) firstDate = dateMatch[1].substring(0, 7);
@@ -664,8 +668,10 @@ body { min-width:1496px; }
 
     if (!firstDate || values.length === 0) return null;
 
-    // Aggregation: Follower = letzter Wert (Gesamtstand), sonst Summe aller Tageswerte
-    var total = values.reduce(function (a, b) { return a + b; }, 0);
+    // Aggregation: Follower = letzter Wert (kumulativer Gesamtstand), sonst Summe aller Tageswerte
+    var total = isFollower
+      ? values[values.length - 1]
+      : values.reduce(function (a, b) { return a + b; }, 0);
 
     return { platform: platform, month: firstDate, metric: dashMetric, total: Math.round(total) };
   }
