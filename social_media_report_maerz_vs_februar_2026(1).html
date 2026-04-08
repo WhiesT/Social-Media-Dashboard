@@ -665,9 +665,7 @@ body { min-width:1496px; }
     if (!firstDate || values.length === 0) return null;
 
     // Aggregation: Follower = letzter Wert (Gesamtstand), sonst Summe aller Tageswerte
-    var total = isFollower
-      ? values[values.length - 1]
-      : values.reduce(function (a, b) { return a + b; }, 0);
+    var total = values.reduce(function (a, b) { return a + b; }, 0);
 
     return { platform: platform, month: firstDate, metric: dashMetric, total: Math.round(total) };
   }
@@ -806,7 +804,7 @@ body { min-width:1496px; }
       }
     });
 
-    showFeedback('Dashboard aktualisiert · ' + label, 'success');
+    showFeedback('Neue Zahlen hochgeladen · ' + label, 'success');
   }
 
   function showFeedback(msg, type) {
