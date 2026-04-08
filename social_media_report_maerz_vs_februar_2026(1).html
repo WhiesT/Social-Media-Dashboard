@@ -624,24 +624,16 @@ body { min-width:1496px; }
     }
   }
 
-  // ---- Meta-Format erkennen ----
-  // Meta-Export: Zeile 1 = Metrik-Name, Zeile 2 = Header, Zeile 3+ = taegliche Werte (YYYY-MM-DD)
-  function isMetaFormat(text) {
-    var lines = text.replace(/^\uFEFF/, '').split(/\r?\n/).filter(function (l) { return l.trim(); });
-    if (lines.length < 3) return false;
-    // Prüfe ob Header-Zeile "Datum" (ggf. mit Zusatz) enthält
-    var h = lines[1].toLowerCase();
-    if (h.indexOf('datum') !== -1) return true;
-    // Fallback: Daten-Zeilen beginnen mit ISO-Datum YYYY-MM-DD
-    return /^\d{4}-\d{2}-\d{2}/.test(lines[2].trim());
-  }
-
   // ---- Natives Meta-CSV parsen ----
+  // Sucht in ALLEN Zeilen nach ISO-Datums-Daten – unabhaengig von der Headerstruktur
   function parseMetaFile(text, filename) {
-    var lines = text.replace(/^\uFEFF/, '').split(/\r?\n/).filter(function (l) { return l.trim(); });
-    var metricTitle = lines[0].trim();
-    // lines[1] = "Datum,Primary" (Header - ueberspringen)
-    var dataLines = lines.slice(2);
+    // BOM entfernen (UTF-8, UTF-16 LE/BE)
+    text = text.replace(/^[\uFEFF\uFFFE\uFFFD]/, '');
+    var lines = text.split(/\r?\n/).filter(function (l) { return l.trim(); });
+    if (lines.length < 2) return null;
+
+    // Erste Zeile als Metrik-Titel verwenden
+    var metricTitle = lines[0].replace(/['"]/g, '').trim();
 
     // Platform aus Dateiname ermitteln
     var fnl = filename.toLowerCase();
@@ -650,24 +642,22 @@ body { min-width:1496px; }
 
     // Metrik-Typ ermitteln (aus Dateiname + Zeile 1)
     var combined = (metricTitle + ' ' + filename).toLowerCase();
-    var isFollower = /follower|abonnenten|gefällt|fans|subscriber|likes/.test(combined);
+    var isFollower = /follower|abonnenten|gef.llt|fans|subscriber|likes/.test(combined);
     var isViews = /aufrufe|views|reel|video|impressionen|reichweite|reach/.test(combined);
     var dashMetric = isFollower ? 'Followerstand' : isViews ? 'Aufrufe' : 'Interaktionen';
 
-    // Trennzeichen erkennen (Komma oder Semikolon)
-    var sep = (dataLines[0] && dataLines[0].indexOf(';') !== -1) ? ';' : ',';
-
-    // Taegliche Werte einlesen
+    // Alle Zeilen nach ISO-Datums-Zeilen durchsuchen (YYYY-MM-DD)
     var values = [];
     var firstDate = null;
-    for (var i = 0; i < dataLines.length; i++) {
-      var parts = dataLines[i].split(sep);
-      if (parts.length < 2) continue;
-      // Datum: "2026-03-01T00:00:00" → nur YYYY-MM-DD Teil nehmen
-      var dateStr = parts[0].trim().replace(/T.*$/, '');
-      var val = parseFloat(parts[1].replace(',', '.')) || 0;
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i].trim();
+      var dateMatch = line.match(/^"?(\d{4}-\d{2}-\d{2})/);
+      if (!dateMatch) continue;
+      var sep = line.indexOf(';') !== -1 ? ';' : ',';
+      var parts = line.split(sep);
+      var val = parts.length >= 2 ? (parseFloat(parts[1].replace(/[^0-9.,\-]/g, '').replace(',', '.')) || 0) : 0;
       values.push(val);
-      if (!firstDate && dateStr.length >= 7) firstDate = dateStr.substring(0, 7);
+      if (!firstDate) firstDate = dateMatch[1].substring(0, 7);
     }
 
     if (!firstDate || values.length === 0) return null;
@@ -833,13 +823,9 @@ body { min-width:1496px; }
       reader.onload = function (e) {
         var text = e.target.result;
         try {
-          if (isMetaFormat(text)) {
-            var r = parseMetaFile(text, file.name);
-            if (r) { metaResults.push(r); metaCount++; }
-            else { errors.push(file.name + ': konnte nicht erkannt werden'); }
-          } else {
-            errors.push(file.name + ': Kein gültiges Meta-Export-Format erkannt');
-          }
+          var r = parseMetaFile(text, file.name);
+          if (r) { metaResults.push(r); metaCount++; }
+          else { errors.push(file.name + ': Kein gültiges Meta-Export-Format erkannt'); }
         } catch (err) { errors.push(file.name + ': ' + err.message); }
         pending--;
         if (pending === 0) finalize();
